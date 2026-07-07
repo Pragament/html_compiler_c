@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Browser C Compiler (WASM)</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #1e1e2e;
+            color: #cdd6f4;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 820px;
+            width: 100%;
+            background: #313244;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+        }
+        h1 {
+            margin-top: 0;
+            font-weight: 600;
+            color: #f9e2af;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .sub {
+            color: #a6adc8;
+            margin-bottom: 20px;
+            font-size: 0.95rem;
+        }
+        textarea {
+            width: 100%;
+            height: 260px;
+            background: #1e1e2e;
+            color: #cdd6f4;
+            border: 1px solid #45475a;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            resize: vertical;
+            outline: none;
+            tab-size: 4;
+        }
+        textarea:focus {
+            border-color: #89b4fa;
+        }
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin: 15px 0 10px 0;
+        }
+        button {
+            background: #89b4fa;
+            color: #1e1e2e;
+            border: none;
+            padding: 10px 28px;
+            font-size: 15px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        button:hover:not(:disabled) {
+            background: #b4befe;
+            transform: scale(1.02);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .status {
+            font-size: 14px;
+            color: #a6adc8;
+            margin-top: 6px;
+            min-height: 24px;
+        }
+        .output-label {
+            margin: 12px 0 4px 0;
+            font-weight: 500;
+        }
+        #output {
+            background: #1e1e2e;
+            border-radius: 8px;
+            padding: 15px;
+            border: 1px solid #45475a;
+            min-height: 120px;
+            max-height: 350px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .error {
+            color: #f38ba8;
+            border-color: #f38ba8 !important;
+        }
+        .badge {
+            background: #45475a;
+            padding: 2px 10px;
+            border-radius: 30px;
+            font-size: 12px;
+            color: #a6adc8;
+        }
+        .footer {
+            margin-top: 20px;
+            font-size: 13px;
+            color: #6c7086;
+            text-align: center;
+        }
+        a {
+            color: #89b4fa;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>
+            <span>⬡</span> Browser C Compiler
+            <span class="badge">WASM + picoc</span>
+        </h1>
+        <p class="sub">
+            🚀 Runs entirely client-side. No code is sent to any server.
+            Powered by <a href="https://github.com/omni-wasm/c" target="_blank">@omni-wasm/c</a>.
+        </p>
+
+        <textarea id="code" spellcheck="false">#include &lt;stdio.h&gt;
+
+int main() {
+    printf("Hello, World from the Browser!\n");
+    
+    int num = 42;
+    printf("The answer is: %d\n", num);
+    
+    int sum = 0;
+    for (int i = 1; i &lt;= 10; i++) {
+        sum += i;
+    }
+    printf("Sum of 1 to 10 is: %d\n", sum);
+    
+    return 0;
+}</textarea>
+
+        <div class="toolbar">
+            <button id="runBtn" disabled>▶ Run Code</button>
+            <span id="status" class="status">⏳ Loading compiler (approx 200KB)...</span>
+        </div>
+
+        <div class="output-label">📤 Output</div>
+        <div id="output">Waiting for compilation...</div>
+
+        <div class="footer">
+            GitHub Pages ready &bull; Works offline after first load
+        </div>
+    </div>
+
+    <!-- Use import map to load the ESM module from CDN -->
+    <script type="importmap">
+        {
+            "imports": {
+                "@omni-wasm/c": "https://cdn.jsdelivr.net/npm/@omni-wasm/c@0.0.9/dist/omni-c.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import init from '@omni-wasm/c';
+
+        // --- DOM refs ---
+        const codeArea = document.getElementById('code');
+        const runBtn = document.getElementById('runBtn');
+        const outputDiv = document.getElementById('output');
+        const statusDiv = document.getElementById('status');
+
+        let cInstance = null;
+
+        // --- Load the WebAssembly compiler ---
+        try {
+            statusDiv.textContent = '⏳ Loading WebAssembly compiler (approx 200KB)...';
+            cInstance = await init();
+            statusDiv.textContent = '✅ Ready! Write your C code and click Run.';
+            runBtn.disabled = false;
+        } catch (err) {
+            statusDiv.textContent = '❌ Failed to load compiler: ' + err.message;
+            console.error(err);
+            runBtn.disabled = true;
+            outputDiv.textContent = 'Error: Could not initialize the C interpreter. Please check your internet connection or reload.';
+            outputDiv.className = 'output-box error';
+        }
+
+        // --- Run button handler ---
+        runBtn.addEventListener('click', async () => {
+            if (!cInstance) {
+                outputDiv.textContent = 'Compiler not initialized. Please reload.';
+                return;
+            }
+
+            const code = codeArea.value;
+            outputDiv.textContent = '⏳ Compiling and running...';
+            outputDiv.className = ''; // reset error styling
+            runBtn.disabled = true;
+            statusDiv.textContent = '⏳ Running...';
+
+            try {
+                const result = await cInstance.run(code);
+
+                let outputText = '';
+                if (result.stdout) {
+                    outputText += result.stdout;
+                }
+                if (result.stderr) {
+                    if (outputText) outputText += '\n--- stderr ---\n';
+                    outputText += result.stderr;
+                }
+                if (result.exitCode !== undefined && result.exitCode !== 0) {
+                    if (outputText) outputText += '\n';
+                    outputText += `[Process exited with code ${result.exitCode}]`;
+                }
+
+                if (outputText === '') {
+                    outputText = '[Program compiled and ran successfully, but produced no output.]';
+                }
+
+                outputDiv.textContent = outputText;
+                statusDiv.textContent = `✅ Done. Exit code: ${result.exitCode ?? 'N/A'}`;
+            } catch (err) {
+                outputDiv.textContent = '❌ Runtime Error:\n' + (err.message || String(err));
+                outputDiv.className = 'error';
+                statusDiv.textContent = '❌ Error during execution.';
+                console.error(err);
+            } finally {
+                runBtn.disabled = false;
+            }
+        });
+
+        // Enable the button if the compiler loaded before the listener was attached.
+        if (cInstance) {
+            runBtn.disabled = false;
+        }
+    </script>
+</body>
+</html>
