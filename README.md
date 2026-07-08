@@ -62,26 +62,28 @@ Features include:
 
 ---
 
-## Project Structure
+## Folder Structure
 
-```
-browser-c-compiler/
+```text
+html_compiler_c/
 │
 ├── src/
-│   ├── main.js
-│   ├── editor.js
-│   ├── sidebar.js
-│   ├── search.js
-│   └── snippets.js
+│   ├── editor.js          # CodeMirror 6 editor configuration
+│   ├── main.js            # Main application logic and compiler integration
+│   ├── search.js          # Search and category filtering
+│   ├── sidebar.js         # Sidebar rendering and snippet management
+│   └── snippets.js        # Built-in C code snippets
 │
-├── patches/
-│   └── picoc-js+1.0.12.patch
+├── favicon.svg            # Browser favicon
+├── index.html             # Main application UI
+├── package.json           # Project configuration and dependencies
+├── package-lock.json      # Dependency lock file
+├── README.md              # Project documentation
+├── LICENSE                # AGPL-3.0 License
+├── .gitignore             # Git ignore rules
 │
-├── index.html
-├── package.json
-├── package-lock.json
-├── README.md
-└── LICENSE
+├── node_modules/          # Installed npm packages (generated)
+└── dist/                  # Production build output (generated)
 ```
 
 ---
