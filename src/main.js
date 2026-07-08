@@ -115,14 +115,8 @@ function executeCode() {
 const initialCode = SNIPPETS[0] ? SNIPPETS[0].code : '';
 initEditor(editorContainer, initialCode, { onRun: executeCode });
 
-// Initialize collapsible left sidebar and snippet selection loader
-initSidebar({
-  onSelectSnippet: (snippet) => {
-    setEditorValue(snippet.code);
-    clearOutput();
-    outputEl.textContent = `Loaded snippet: "${snippet.title}". Click "Run Code" or press Ctrl+Enter to execute.`;
-  }
-});
+// Initialize collapsible left sidebar educational snippet browser
+initSidebar();
 
 // Attach event listeners
 runBtn.addEventListener('click', executeCode);
