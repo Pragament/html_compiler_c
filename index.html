@@ -1,13 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Browser C Compiler (WASM)</title>
+    <title>Browser C Compiler</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <style>
         * {
             box-sizing: border-box;
         }
+
         body {
             font-family: system-ui, -apple-system, sans-serif;
             background: #1e1e2e;
@@ -19,14 +22,16 @@
             align-items: center;
             padding: 20px;
         }
+
         .container {
-            max-width: 820px;
+            max-width: 1180px;
             width: 100%;
             background: #313244;
             padding: 30px;
             border-radius: 16px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
         }
+
         h1 {
             margin-top: 0;
             font-weight: 600;
@@ -35,29 +40,202 @@
             align-items: center;
             gap: 8px;
         }
+
         .sub {
             color: #a6adc8;
             margin-bottom: 20px;
             font-size: 0.95rem;
         }
-        textarea {
-            width: 100%;
-            height: 260px;
+
+        /* Responsive Layout */
+        .main-layout {
+            display: flex;
+            gap: 24px;
+            align-items: flex-start;
+        }
+
+        /* Sidebar styling */
+        #sidebar {
+            width: 310px;
+            flex-shrink: 0;
             background: #1e1e2e;
+            border: 1px solid #45475a;
+            border-radius: 12px;
+            padding: 16px;
+            transition: width 0.3s ease, padding 0.3s ease, opacity 0.3s ease, border-color 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 700px;
+            overflow: hidden;
+        }
+
+        #sidebar.collapsed {
+            width: 0;
+            padding: 0;
+            border: none;
+            opacity: 0;
+            margin: 0;
+        }
+
+        .sidebar-header {
+            font-weight: 600;
+            color: #f9e2af;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .search-box input {
+            width: 100%;
+            background: #181825;
             color: #cdd6f4;
             border: 1px solid #45475a;
-            border-radius: 8px;
-            padding: 15px;
-            font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace;
-            font-size: 14px;
-            line-height: 1.5;
-            resize: vertical;
+            border-radius: 6px;
+            padding: 8px 10px;
+            font-size: 13px;
             outline: none;
-            tab-size: 4;
+            transition: border-color 0.2s;
         }
-        textarea:focus {
+
+        .search-box input:focus {
             border-color: #89b4fa;
         }
+
+        .category-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            max-height: 100px;
+            overflow-y: auto;
+            padding-bottom: 4px;
+        }
+
+        .cat-btn {
+            background: #313244;
+            color: #a6adc8;
+            border: 1px solid #45475a;
+            padding: 4px 8px;
+            font-size: 11px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .cat-btn:hover,
+        .cat-btn.active {
+            background: #89b4fa;
+            color: #1e1e2e;
+            border-color: #89b4fa;
+            font-weight: bold;
+        }
+
+        .snippet-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            overflow-y: auto;
+            flex-grow: 1;
+            padding-right: 4px;
+            max-height: 480px;
+        }
+
+        .snippet-card {
+            background: #181825;
+            border: 1px solid #45475a;
+            border-radius: 8px;
+            padding: 10px;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .snippet-card:hover {
+            border-color: #89b4fa;
+            transform: translateX(2px);
+        }
+
+        .snippet-card.active {
+            border-color: #89b4fa;
+            background: #313244;
+        }
+
+        .snippet-title {
+            font-weight: 600;
+            font-size: 13px;
+            color: #cdd6f4;
+        }
+
+        .snippet-desc {
+            font-size: 11px;
+            color: #a6adc8;
+            line-height: 1.3;
+        }
+
+        .snippet-badge {
+            align-self: flex-start;
+            background: #45475a;
+            color: #f38ba8;
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 4px;
+            margin-top: 4px;
+        }
+
+        .no-results {
+            font-size: 13px;
+            color: #6c7086;
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        /* Main Content Area styling */
+        .content-area {
+            flex-grow: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .toggle-btn {
+            background: #45475a;
+            color: #cdd6f4;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .toggle-btn:hover {
+            background: #585b70;
+            transform: scale(1.02);
+        }
+
+        .shortcut-hint {
+            font-size: 12px;
+            color: #a6adc8;
+        }
+
+        #editor-container {
+            width: 100%;
+        }
+
         .toolbar {
             display: flex;
             align-items: center;
@@ -65,7 +243,8 @@
             flex-wrap: wrap;
             margin: 15px 0 10px 0;
         }
-        button {
+
+        button#runBtn {
             background: #89b4fa;
             color: #1e1e2e;
             border: none;
@@ -76,25 +255,30 @@
             cursor: pointer;
             transition: 0.2s;
         }
-        button:hover:not(:disabled) {
+
+        button#runBtn:hover:not(:disabled) {
             background: #b4befe;
             transform: scale(1.02);
         }
-        button:disabled {
+
+        button#runBtn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             transform: none;
         }
+
         .status {
             font-size: 14px;
             color: #a6adc8;
             margin-top: 6px;
             min-height: 24px;
         }
+
         .output-label {
             margin: 12px 0 4px 0;
             font-weight: 500;
         }
+
         #output {
             background: #1e1e2e;
             border-radius: 8px;
@@ -109,10 +293,12 @@
             font-size: 14px;
             line-height: 1.5;
         }
+
         .error {
             color: #f38ba8;
             border-color: #f38ba8 !important;
         }
+
         .badge {
             background: #45475a;
             padding: 2px 10px;
@@ -120,21 +306,36 @@
             font-size: 12px;
             color: #a6adc8;
         }
+
         .footer {
             margin-top: 20px;
             font-size: 13px;
             color: #6c7086;
             text-align: center;
         }
+
         a {
             color: #89b4fa;
             text-decoration: none;
         }
+
         a:hover {
             text-decoration: underline;
         }
+
+        @media (max-width: 850px) {
+            .main-layout {
+                flex-direction: column;
+            }
+
+            #sidebar {
+                width: 100%;
+                max-height: 400px;
+            }
+        }
     </style>
 </head>
+
 <body>
 
     <div class="container">
@@ -144,122 +345,47 @@
         </h1>
         <p class="sub">
             🚀 Runs entirely client-side. No code is sent to any server.
-            Powered by <a href="https://github.com/omni-wasm/c" target="_blank">@omni-wasm/c</a>.
+            Powered by <a href="https://github.com/KritR/picoc-wasm" target="_blank">picoc-js</a>.
         </p>
 
-        <textarea id="code" spellcheck="false">#include &lt;stdio.h&gt;
+        <div class="main-layout">
+            <aside id="sidebar">
+                <div class="sidebar-header">
+                    <span>📚 C Snippets Library</span>
+                </div>
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="Search snippets..." autocomplete="off" />
+                </div>
+                <div id="categoryTabs" class="category-tabs"></div>
+                <div id="snippetList" class="snippet-list"></div>
+            </aside>
 
-int main() {
-    printf("Hello, World from the Browser!\n");
-    
-    int num = 42;
-    printf("The answer is: %d\n", num);
-    
-    int sum = 0;
-    for (int i = 1; i &lt;= 10; i++) {
-        sum += i;
-    }
-    printf("Sum of 1 to 10 is: %d\n", sum);
-    
-    return 0;
-}</textarea>
+            <main class="content-area">
+                <div class="editor-header">
+                    <button id="toggleSidebarBtn" class="toggle-btn" title="Collapse Sidebar">◀ Snippets</button>
+                    <span class="shortcut-hint">💡 Shortcut: Ctrl + Enter to Run</span>
+                </div>
 
-        <div class="toolbar">
-            <button id="runBtn" disabled>▶ Run Code</button>
-            <span id="status" class="status">⏳ Loading compiler (approx 200KB)...</span>
+                <div id="editor-container"></div>
+
+                <div class="toolbar">
+                    <button id="runBtn" disabled>▶ Run Code</button>
+                    <span id="status" class="status">⏳ Loading compiler (approx 200KB)...</span>
+                </div>
+
+                <div class="output-label">📤 Output</div>
+                <div id="output">Waiting for compilation...</div>
+            </main>
         </div>
-
-        <div class="output-label">📤 Output</div>
-        <div id="output">Waiting for compilation...</div>
 
         <div class="footer">
             GitHub Pages ready &bull; Works offline after first load
         </div>
     </div>
 
-    <!-- Use import map to load the ESM module from CDN -->
-    <script type="importmap">
-        {
-            "imports": {
-                "@omni-wasm/c": "https://cdn.jsdelivr.net/npm/@omni-wasm/c@0.0.9/dist/omni-c.js"
-            }
-        }
-    </script>
 
-    <script type="module">
-        import init from '@omni-wasm/c';
+    <script type="module" src="/src/main.js"></script>
 
-        // --- DOM refs ---
-        const codeArea = document.getElementById('code');
-        const runBtn = document.getElementById('runBtn');
-        const outputDiv = document.getElementById('output');
-        const statusDiv = document.getElementById('status');
-
-        let cInstance = null;
-
-        // --- Load the WebAssembly compiler ---
-        try {
-            statusDiv.textContent = '⏳ Loading WebAssembly compiler (approx 200KB)...';
-            cInstance = await init();
-            statusDiv.textContent = '✅ Ready! Write your C code and click Run.';
-            runBtn.disabled = false;
-        } catch (err) {
-            statusDiv.textContent = '❌ Failed to load compiler: ' + err.message;
-            console.error(err);
-            runBtn.disabled = true;
-            outputDiv.textContent = 'Error: Could not initialize the C interpreter. Please check your internet connection or reload.';
-            outputDiv.className = 'output-box error';
-        }
-
-        // --- Run button handler ---
-        runBtn.addEventListener('click', async () => {
-            if (!cInstance) {
-                outputDiv.textContent = 'Compiler not initialized. Please reload.';
-                return;
-            }
-
-            const code = codeArea.value;
-            outputDiv.textContent = '⏳ Compiling and running...';
-            outputDiv.className = ''; // reset error styling
-            runBtn.disabled = true;
-            statusDiv.textContent = '⏳ Running...';
-
-            try {
-                const result = await cInstance.run(code);
-
-                let outputText = '';
-                if (result.stdout) {
-                    outputText += result.stdout;
-                }
-                if (result.stderr) {
-                    if (outputText) outputText += '\n--- stderr ---\n';
-                    outputText += result.stderr;
-                }
-                if (result.exitCode !== undefined && result.exitCode !== 0) {
-                    if (outputText) outputText += '\n';
-                    outputText += `[Process exited with code ${result.exitCode}]`;
-                }
-
-                if (outputText === '') {
-                    outputText = '[Program compiled and ran successfully, but produced no output.]';
-                }
-
-                outputDiv.textContent = outputText;
-                statusDiv.textContent = `✅ Done. Exit code: ${result.exitCode ?? 'N/A'}`;
-            } catch (err) {
-                outputDiv.textContent = '❌ Runtime Error:\n' + (err.message || String(err));
-                outputDiv.className = 'error';
-                statusDiv.textContent = '❌ Error during execution.';
-                console.error(err);
-            } finally {
-                runBtn.disabled = false;
-            }
-        });
-
-        // Enable the button if the compiler loaded before the listener was attached.
-        if (cInstance) {
-            runBtn.disabled = false;
-        }
-    </script>
 </body>
+
 </html>
