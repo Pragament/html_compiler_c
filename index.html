@@ -158,7 +158,8 @@
             transform: translateX(2px);
         }
 
-        .snippet-card.active {
+        .snippet-card.active,
+        .snippet-card.expanded {
             border-color: #89b4fa;
             background: #313244;
         }
@@ -183,6 +184,65 @@
             padding: 1px 6px;
             border-radius: 4px;
             margin-top: 4px;
+        }
+
+        .snippet-preview-container {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #45475a;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .snippet-code-preview {
+            background: #1e1e2e;
+            border: 1px solid #45475a;
+            border-radius: 6px;
+            padding: 10px;
+            margin: 0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #cdd6f4;
+            max-height: 200px;
+            overflow: auto;
+            white-space: pre;
+            cursor: text;
+        }
+
+        .snippet-code-preview code {
+            font-family: inherit;
+            color: inherit;
+        }
+
+        .snippet-copy-btn {
+            align-self: flex-start;
+            background: #45475a;
+            color: #cdd6f4;
+            border: 1px solid #585b70;
+            border-radius: 6px;
+            padding: 5px 12px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .snippet-copy-btn:hover {
+            background: #89b4fa;
+            color: #1e1e2e;
+            border-color: #89b4fa;
+        }
+
+        .snippet-copy-btn.copied {
+            background: #a6e3a1;
+            color: #1e1e2e;
+            border-color: #a6e3a1;
+            font-weight: 600;
         }
 
         .no-results {
