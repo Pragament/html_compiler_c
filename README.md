@@ -1,6 +1,6 @@
-# Browser C Compiler (Release 1)
+# Browser C Compiler
 
-A browser-based C compiler built with **JavaScript**, **WebAssembly**, and **Vite** that allows users to write, compile, and execute C programs directly in the browser without requiring any backend server.
+A browser-based C compiler built with **JavaScript**, **JSCPP**, and **Vite** that allows users to write, compile, and execute C programs directly in the browser without requiring any backend server.
 
 The application is fully client-side and provides an interactive coding environment with syntax highlighting, code snippets, and instant execution.
 
@@ -44,7 +44,7 @@ Features include:
 ### Browser Compilation
 
 - 100% client-side execution
-- WebAssembly-based runtime
+- Pure JavaScript JSCPP runtime
 - No backend server
 - No API calls
 - No Docker
@@ -72,7 +72,8 @@ html_compiler_c/
 │   ├── main.js            # Main application logic and compiler integration
 │   ├── search.js          # Search and category filtering
 │   ├── sidebar.js         # Sidebar rendering and snippet management
-│   └── snippets.js        # Built-in C code snippets
+│   ├── snippets.js        # Built-in C code snippets
+│   └── stream-stub.js     # Browser stub for Node.js stream module
 │
 ├── favicon.svg            # Browser favicon
 ├── index.html             # Main application UI
@@ -92,9 +93,8 @@ html_compiler_c/
 
 - JavaScript (ES Modules)
 - Vite
-- WebAssembly
+- JSCPP
 - CodeMirror 6
-- picoc-js
 - HTML5
 - CSS3
 
@@ -142,12 +142,12 @@ npm run preview
 
 ## Current Release
 
-### Release 1
+### Release 1 (Powered by JSCPP)
 
 Implemented:
 
 - Browser-based C execution
-- WebAssembly runtime integration
+- JSCPP runtime integration
 - Modular frontend architecture
 - CodeMirror editor
 - Educational snippet library
@@ -158,17 +158,17 @@ Implemented:
 
 ---
 
-## Known Limitations
+## Supported C Features
 
-This project currently uses the **picoc-js** WebAssembly runtime.
+The browser compiler supports standard C language features including:
 
-Because of limitations in the underlying runtime:
-
-- Some `printf()` statements without a trailing newline (`\n`) may not immediately display output.
-- Certain C standard library behaviors depend on the runtime implementation.
-- This project is intended as an educational browser-based compiler rather than a complete GCC or Clang replacement.
-
-These limitations originate from the runtime itself rather than the frontend implementation.
+- `printf` formatting and output
+- Variables and arithmetic operations
+- Conditional statements (`if` / `else`, `switch`)
+- Loops (`for`, `while`, `do while`, nested loops)
+- Functions and recursion
+- Arrays and pointers
+- Local scope and memory modeling
 
 ---
 
@@ -176,7 +176,6 @@ These limitations originate from the runtime itself rather than the frontend imp
 
 Planned enhancements include:
 
-- Better runtime output buffering
 - Input support using `scanf()`
 - File upload support
 - Download source code

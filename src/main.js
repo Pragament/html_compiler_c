@@ -1,10 +1,10 @@
 /**
  * Main Application Orchestrator
- * Integrates CodeMirror 6 editor, left sidebar snippets library, and picoc-js runtime.
- * Preserves exact Release 1 compiler integration, status transitions, and error handling.
+ * Integrates CodeMirror 6 editor, left sidebar snippets library, and JSCPP C runtime.
+ * Preserves exact status transitions, output console behavior, and error handling.
  */
 
-import { runC } from 'picoc-js';
+import JSCPP from 'JSCPP';
 import { initEditor, getEditorValue, setEditorValue } from './editor.js';
 import { initSidebar } from './sidebar.js';
 import { SNIPPETS } from './snippets.js';
@@ -58,12 +58,12 @@ function displayCompilerError(text) {
 }
 
 /**
- * Initializes the WebAssembly compiler runtime on initial page load.
+ * Initializes the compiler runtime on initial page load.
  */
 function initializeCompiler() {
   updateStatus('loading', '⏳ Loading compiler...');
   clearOutput();
-  outputEl.textContent = 'Initializing WASM compiler runtime...';
+  outputEl.textContent = 'Initializing JSCPP runtime...';
 
   setTimeout(() => {
     updateStatus('ready', '🟢 Ready');
@@ -72,43 +72,57 @@ function initializeCompiler() {
 }
 
 /**
- * Executes the C source code from the CodeMirror editor using picoc-js.
+ * Executes the C source code from the CodeMirror editor using JSCPP.
  */
 function executeCode() {
   const code = getEditorValue();
   updateStatus('running', '⏳ Running...');
   clearOutput();
 
-  let outputLines = [];
-  let hasError = false;
+  const startTime = performance.now();
+  let stdout = '';
+  let stderr = '';
+  let exitCode = 0;
+  let success = true;
+
+  const config = {
+    stdio: {
+      write: (s) => {
+        stdout += s;
+      }
+    },
+    unsigned_overflow: 'error'
+  };
 
   try {
-    // Execute C compilation and runtime evaluation using frozen picoc-js integration
-    runC(code, (out) => {
-      if (out !== undefined && out !== null) {
-        const line = String(out);
-        outputLines.push(line);
-        
-        // Detect compilation diagnostics since Emscripten's callMain swallows ExitStatus
-        if (line.includes('file.c:') || line.includes('error:') || line.includes('Aborted') || line.includes("';' expected")) {
-          hasError = true;
-        }
-      }
-    });
+    const result = JSCPP.run(code, '', config);
+    if (typeof result === 'number') {
+      exitCode = result;
+    } else if (result !== undefined && result !== null) {
+      exitCode = Number(result) || 0;
+    } else {
+      exitCode = 0;
+    }
+    if (exitCode !== 0) {
+      success = false;
+    }
   } catch (err) {
-    outputLines.push('Runtime Exception: ' + (err.message || String(err)));
-    hasError = true;
+    stderr = err.message || String(err);
+    exitCode = 1;
+    success = false;
   }
 
-  // Allow synchronous callMain and stream flushing to settle
-  setTimeout(() => {
-    const finalOutput = outputLines.join('\n');
-    if (hasError) {
-      displayCompilerError(finalOutput);
-    } else {
-      displayOutput(finalOutput);
-    }
-  }, 300);
+  const duration = Math.round(performance.now() - startTime);
+
+  if (!success) {
+    displayCompilerError(stderr || stdout || 'Execution failed with no output.');
+  } else {
+    displayOutput(stdout);
+  }
+
+  if (import.meta.env && import.meta.env.DEV) {
+    console.log(`Runtime:\nJSCPP\nExecution Time:\n${duration} ms\nExit Code:\n${exitCode}`);
+  }
 }
 
 // Initialize CodeMirror 6 editor with default snippet and Ctrl+Enter shortcut
