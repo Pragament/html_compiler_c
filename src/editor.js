@@ -60,7 +60,7 @@ const catppuccinTheme = EditorView.theme({
  * @param {Object} options - Configuration options ({ onRun })
  * @returns {EditorView} The initialized editor view instance
  */
-export function initEditor(container, initialCode = '', { onRun = () => {} } = {}) {
+export function initEditor(container, initialCode = '', { onRun = () => { } } = {}) {
   // Clear any fallback textarea if present
   container.innerHTML = '';
 

@@ -22,7 +22,7 @@ export function initSearch({ onFilterChange }, searchInputId = 'searchInput', ca
   if (searchEl) {
     searchEl.addEventListener('input', (e) => {
       currentQuery = e.target.value || '';
-      
+
       // Debounce search slightly for responsive typing feel
       if (searchTimeout) clearTimeout(searchTimeout);
       searchTimeout = setTimeout(() => {
@@ -54,7 +54,7 @@ export function initSearch({ onFilterChange }, searchInputId = 'searchInput', ca
 export function resetFilters(onFilterChange) {
   currentCategory = 'All';
   currentQuery = '';
-  
+
   const searchEl = document.getElementById('searchInput');
   if (searchEl) searchEl.value = '';
 
