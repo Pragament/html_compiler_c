@@ -4,8 +4,20 @@
  *
  * Execution Flow:
  *   Phase 1 — Compile: BrowserCC compiles C source to a WASM module.
- *   Phase 2 — Collect: Terminal enters interactive mode; user types stdin
- *             lines one at a time and presses Enter. Ctrl+D signals EOF.
+ *
+ *   Phase 2 — Classify & Collect:
+ *     analyzeStdin() inspects the C source and returns one of three cases:
+ *
+ *     'none'    — program never reads stdin.
+ *                 Skip input collection entirely; execute immediately.
+ *
+ *     'fixed'   — program calls scanf / getchar / fgets a fixed N times,
+ *                 never inside a loop.  collectStdin(N) auto-resolves after
+ *                 the user submits N lines.  No Ctrl+D required.
+ *
+ *     'unknown' — stdin is inside a loop or is EOF-driven (while(scanf…)).
+ *                 collectStdin(null) waits until the user presses Ctrl+D.
+ *
  *   Phase 3 — Execute: The collected stdin is fed to wasi.start(). During
  *             synchronous execution an ordered event queue is populated:
  *               stdout events (from ConsoleStdout / printf)
@@ -13,6 +25,7 @@
  *             Because wasi.start() is single-threaded and synchronous the
  *             callbacks fire in exactly the chronological order the C
  *             program produces them.
+ *
  *   Phase 4 — Render: Terminal is cleared and the event queue is replayed
  *             in order, producing output that is visually identical to a
  *             native Linux terminal session.
@@ -26,11 +39,12 @@ import { initEditor, getEditorValue } from './editor.js';
 import { initSidebar } from './sidebar.js';
 import { SNIPPETS } from './snippets.js';
 import { InteractiveTerminal } from './terminal.js';
+import { analyzeStdin } from './analyzer.js';
 
 // ─── DOM References ───────────────────────────────────────────────────────────
-const runBtn            = document.getElementById('runBtn');
-const statusEl          = document.getElementById('status');
-const editorContainer   = document.getElementById('editor-container');
+const runBtn = document.getElementById('runBtn');
+const statusEl = document.getElementById('status');
+const editorContainer = document.getElementById('editor-container');
 const terminalContainer = document.getElementById('terminal-container');
 
 // ─── Terminal ─────────────────────────────────────────────────────────────────
@@ -71,8 +85,8 @@ function updateStatus(state, text) {
 // ─── Main execution flow ──────────────────────────────────────────────────────
 async function executeCode() {
   const code = getEditorValue();
-  const dec  = new TextDecoder();
-  const enc  = new TextEncoder();
+  const dec = new TextDecoder();
+  const enc = new TextEncoder();
 
   // ── Phase 1: Compile ──────────────────────────────────────────────────────
   terminal.clear();
@@ -101,11 +115,48 @@ async function executeCode() {
     return;
   }
 
-  terminal.writeInfo('✓ Compiled. Type stdin below — Enter to submit each line, Ctrl+D when done.\r\n');
+  // ── Phase 2: Classify stdin usage and collect accordingly ────────────────
+  //
+  // analyzeStdin() tokenises the C source (strips comments/literals/macros)
+  // and classifies the program into one of three categories:
+  //
+  //   'none'    → no stdin calls detected      → execute immediately
+  //   'fixed'   → N calls, none inside a loop  → auto-submit after N lines
+  //   'unknown' → stdin inside loop / EOF-loop → require Ctrl+D
+  //
+  // This avoids forcing the user to press Ctrl+D for simple programs.
+  const analysis = analyzeStdin(code);
+  let stdinStr = '';
 
-  // ── Phase 2: Collect stdin interactively ──────────────────────────────────
-  updateStatus('running', '⌨️  Waiting for input… (Ctrl+D = EOF)');
-  const stdinStr = await terminal.collectStdin();
+  if (analysis.type === 'none') {
+    // ── CASE 1: No stdin ─────────────────────────────────────────────────
+    terminal.writeInfo('✓ Compiled. Running…\r\n');
+    updateStatus('running', '⏳ Running…');
+    // stdinStr stays '' — no input collection needed
+
+  } else if (analysis.type === 'fixed') {
+    // ── CASE 2: Fixed input ───────────────────────────────────────────────
+    // The program reads stdin exactly analysis.count times (no loops).
+    // Show a clear prompt and auto-execute once all lines are submitted.
+    const n = analysis.count;
+    const plural = n !== 1 ? 's' : '';
+    terminal.writeInfo(
+      `✓ Compiled. This program reads ${n} input${plural}. ` +
+      `Type each value and press Enter.\r\n`
+    );
+    updateStatus('running', `⌨️  Enter ${n} input${plural}…`);
+    stdinStr = await terminal.collectStdin(n);
+
+  } else {
+    // ── CASE 3: Unknown / loop-driven stdin ───────────────────────────────
+    // The program reads stdin inside a loop or EOF-driven pattern.
+    // The user must press Ctrl+D to signal end-of-input.
+    terminal.writeInfo(
+      '✓ Compiled. Type stdin — Enter after each line, Ctrl+D when done.\r\n'
+    );
+    updateStatus('running', '⌨️  Waiting for input… (Ctrl+D = EOF)');
+    stdinStr = await terminal.collectStdin(null);
+  }
 
   // ── Phase 3: Execute WASM — build ordered event queue ─────────────────────
   updateStatus('running', '⏳ Running…');
@@ -141,9 +192,9 @@ async function executeCode() {
     new PreopenDirectory('.', fs),
   ];
 
-  const wasi    = new WASI([], [], fds);
-  let exitCode  = 0;
-  let success   = true;
+  const wasi = new WASI([], [], fds);
+  let exitCode = 0;
+  let success = true;
 
   try {
     const instance = await WebAssembly.instantiate(module, {
@@ -154,7 +205,7 @@ async function executeCode() {
   } catch (err) {
     eventQueue.push({ type: 'stderr', text: `\nRuntime Exception: ${err.message || String(err)}` });
     exitCode = 1;
-    success  = false;
+    success = false;
   }
 
   // ── Phase 4: Replay event queue in chronological order ────────────────────
