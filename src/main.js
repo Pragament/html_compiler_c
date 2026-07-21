@@ -1,139 +1,190 @@
 /**
  * Main Application Orchestrator
- * Integrates CodeMirror 6 editor, left sidebar snippets library, and JSCPP C runtime.
- * Preserves exact status transitions, output console behavior, and error handling.
+ * Browser C Compiler — BrowserCC (LLVM Clang + WASI) runtime.
+ *
+ * Execution Flow:
+ *   Phase 1 — Compile: BrowserCC compiles C source to a WASM module.
+ *   Phase 2 — Collect: Terminal enters interactive mode; user types stdin
+ *             lines one at a time and presses Enter. Ctrl+D signals EOF.
+ *   Phase 3 — Execute: The collected stdin is fed to wasi.start(). During
+ *             synchronous execution an ordered event queue is populated:
+ *               stdout events (from ConsoleStdout / printf)
+ *               stdin  events (from EchoingStdin  / scanf)
+ *             Because wasi.start() is single-threaded and synchronous the
+ *             callbacks fire in exactly the chronological order the C
+ *             program produces them.
+ *   Phase 4 — Render: Terminal is cleared and the event queue is replayed
+ *             in order, producing output that is visually identical to a
+ *             native Linux terminal session.
+ *
+ * GitHub Pages compatible — no SharedArrayBuffer, no COOP/COEP, no backend.
  */
 
-import JSCPP from 'JSCPP';
-import { initEditor, getEditorValue, setEditorValue } from './editor.js';
+import { compile } from 'browsercc';
+import { WASI, File, OpenFile, ConsoleStdout, PreopenDirectory } from '@bjorn3/browser_wasi_shim';
+import { initEditor, getEditorValue } from './editor.js';
 import { initSidebar } from './sidebar.js';
 import { SNIPPETS } from './snippets.js';
+import { InteractiveTerminal } from './terminal.js';
 
-// DOM element references
-const runBtn = document.getElementById('runBtn');
-const statusEl = document.getElementById('status');
-const outputEl = document.getElementById('output');
-const editorContainer = document.getElementById('editor-container');
+// ─── DOM References ───────────────────────────────────────────────────────────
+const runBtn            = document.getElementById('runBtn');
+const statusEl          = document.getElementById('status');
+const editorContainer   = document.getElementById('editor-container');
+const terminalContainer = document.getElementById('terminal-container');
 
+// ─── Terminal ─────────────────────────────────────────────────────────────────
+const terminal = new InteractiveTerminal(terminalContainer);
+
+// ─── EchoingStdin ─────────────────────────────────────────────────────────────
 /**
- * Updates the UI status indicator and Run button state.
- * @param {string} state - The current state ('loading' | 'ready' | 'running' | 'finished' | 'error')
- * @param {string} text - The display label for the status badge
+ * Wraps OpenFile so that every chunk of bytes the WASI runtime reads from
+ * stdin is also pushed as a {type:'stdin'} event into the caller-supplied
+ * event queue.  The bytes returned to the runtime are NEVER modified.
+ *
+ * CONTRACT
+ *   - Does NOT modify the `size` parameter passed to fd_read.
+ *   - Does NOT split reads on newline boundaries.
+ *   - Only observes the exact bytes the runtime naturally consumes.
  */
+class EchoingStdin extends OpenFile {
+  constructor(file, onRead) {
+    super(file);
+    this._onRead = onRead;
+  }
+
+  fd_read(size) {
+    const result = super.fd_read(size);
+    if (result.ret === 0 && result.data.length > 0) {
+      this._onRead(result.data);
+    }
+    return result;
+  }
+}
+
+// ─── Status helpers ───────────────────────────────────────────────────────────
 function updateStatus(state, text) {
   statusEl.textContent = text;
-  if (state === 'loading' || state === 'running') {
-    runBtn.disabled = true;
-  } else if (state === 'ready' || state === 'finished' || state === 'error') {
-    runBtn.disabled = false;
-  }
+  runBtn.disabled = (state === 'loading' || state === 'running');
 }
 
-/**
- * Clears the output console and resets its styling class.
- */
-function clearOutput() {
-  outputEl.textContent = '';
-  outputEl.className = '';
-}
-
-/**
- * Displays successful program output in the console.
- * @param {string} text - The formatted stdout content
- */
-function displayOutput(text) {
-  outputEl.textContent = text || 'Program completed with no output.';
-  outputEl.className = '';
-  updateStatus('finished', '🟢 Finished');
-}
-
-/**
- * Displays compiler diagnostics or runtime error output in the console.
- * @param {string} text - The error message or compiler diagnostic output
- */
-function displayCompilerError(text) {
-  outputEl.textContent = text || 'Execution failed with no output.';
-  outputEl.className = 'error';
-  updateStatus('error', '🔴 Error');
-}
-
-/**
- * Initializes the compiler runtime on initial page load.
- */
-function initializeCompiler() {
-  updateStatus('loading', '⏳ Loading compiler...');
-  clearOutput();
-  outputEl.textContent = 'Initializing JSCPP runtime...';
-
-  setTimeout(() => {
-    updateStatus('ready', '🟢 Ready');
-    outputEl.textContent = 'Compiler ready. Click "Run Code" or press Ctrl+Enter to execute.';
-  }, 50);
-}
-
-/**
- * Executes the C source code from the CodeMirror editor using JSCPP.
- */
-function executeCode() {
+// ─── Main execution flow ──────────────────────────────────────────────────────
+async function executeCode() {
   const code = getEditorValue();
-  updateStatus('running', '⏳ Running...');
-  clearOutput();
+  const dec  = new TextDecoder();
+  const enc  = new TextEncoder();
 
-  const startTime = performance.now();
-  let stdout = '';
-  let stderr = '';
-  let exitCode = 0;
-  let success = true;
+  // ── Phase 1: Compile ──────────────────────────────────────────────────────
+  terminal.clear();
+  updateStatus('running', '⏳ Compiling…');
+  terminal.writeInfo('⬡ BrowserCC — compiling…');
 
-  const config = {
-    stdio: {
-      write: (s) => {
-        stdout += s;
-      }
-    },
-    unsigned_overflow: 'error'
-  };
+  let compileResult;
+  try {
+    compileResult = await compile({ source: code, fileName: 'main.c', flags: ['-O2'] });
+  } catch (err) {
+    terminal.writeError(`Compiler Exception:\n${err.message || String(err)}`);
+    updateStatus('error', '🔴 Error');
+    return;
+  }
+
+  const { module, compileOutput } = compileResult;
+
+  if (compileOutput && compileOutput.trim().length > 0) {
+    terminal.writeColored('[Compiler Diagnostics]\r\n', '33');
+    terminal.write(compileOutput.trim() + '\r\n\r\n');
+  }
+
+  if (!module) {
+    terminal.writeError('Compilation failed — no executable produced.');
+    updateStatus('error', '🔴 Error');
+    return;
+  }
+
+  terminal.writeInfo('✓ Compiled. Type stdin below — Enter to submit each line, Ctrl+D when done.\r\n');
+
+  // ── Phase 2: Collect stdin interactively ──────────────────────────────────
+  updateStatus('running', '⌨️  Waiting for input… (Ctrl+D = EOF)');
+  const stdinStr = await terminal.collectStdin();
+
+  // ── Phase 3: Execute WASM — build ordered event queue ─────────────────────
+  updateStatus('running', '⏳ Running…');
+
+  const stdinBytes = enc.encode(stdinStr);
+
+  /**
+   * eventQueue holds every output event in the exact chronological order
+   * produced by the C program.  Because wasi.start() is synchronous and
+   * single-threaded the callbacks for ConsoleStdout (stdout/stderr) and
+   * EchoingStdin (stdin) fire in program-execution order, so the queue is
+   * inherently sorted without any additional logic.
+   *
+   * @type {Array<{type:'stdout'|'stdin'|'stderr', text:string}>}
+   */
+  const eventQueue = [];
+
+  const fs = new Map();
+  const fds = [
+    // fd 0 — stdin: pushes {type:'stdin'} events
+    new EchoingStdin(new File(stdinBytes), (data) => {
+      eventQueue.push({ type: 'stdin', text: dec.decode(data) });
+    }),
+    // fd 1 — stdout: pushes {type:'stdout'} events
+    new ConsoleStdout((data) => {
+      eventQueue.push({ type: 'stdout', text: dec.decode(data) });
+    }),
+    // fd 2 — stderr: pushes {type:'stderr'} events
+    new ConsoleStdout((data) => {
+      eventQueue.push({ type: 'stderr', text: dec.decode(data) });
+    }),
+    // fd 3 — virtual filesystem (file I/O)
+    new PreopenDirectory('.', fs),
+  ];
+
+  const wasi    = new WASI([], [], fds);
+  let exitCode  = 0;
+  let success   = true;
 
   try {
-    const result = JSCPP.run(code, '', config);
-    if (typeof result === 'number') {
-      exitCode = result;
-    } else if (result !== undefined && result !== null) {
-      exitCode = Number(result) || 0;
-    } else {
-      exitCode = 0;
-    }
-    if (exitCode !== 0) {
-      success = false;
-    }
+    const instance = await WebAssembly.instantiate(module, {
+      wasi_snapshot_preview1: wasi.wasiImport,
+    });
+    exitCode = wasi.start(instance);
+    if (exitCode !== 0) success = false;
   } catch (err) {
-    stderr = err.message || String(err);
+    eventQueue.push({ type: 'stderr', text: `\nRuntime Exception: ${err.message || String(err)}` });
     exitCode = 1;
-    success = false;
+    success  = false;
   }
 
-  const duration = Math.round(performance.now() - startTime);
+  // ── Phase 4: Replay event queue in chronological order ────────────────────
+  //
+  // Clear the terminal so the xterm keystroke-echo from Phase 2 is removed.
+  // Then replay each event in order — stdout normally, stdin in cyan (so the
+  // user can visually distinguish typed input from program output), stderr red.
+  terminal.clear();
+  terminal.replayEvents(eventQueue);
 
-  if (!success) {
-    displayCompilerError(stderr || stdout || 'Execution failed with no output.');
+  // Footer
+  terminal.write('\r\n');
+  if (success) {
+    terminal.writeInfo(`── Exit code: ${exitCode} ────────────────────────────────────────`);
+    updateStatus('finished', '🟢 Finished');
   } else {
-    displayOutput(stdout);
-  }
-
-  if (import.meta.env && import.meta.env.DEV) {
-    console.log(`Runtime:\nJSCPP\nExecution Time:\n${duration} ms\nExit Code:\n${exitCode}`);
+    terminal.writeColored(
+      `── Exit code: ${exitCode} (error) ──────────────────────────────────\r\n`, '31'
+    );
+    updateStatus('error', '🔴 Error');
   }
 }
 
-// Initialize CodeMirror 6 editor with default snippet and Ctrl+Enter shortcut
+// ─── Initialization ───────────────────────────────────────────────────────────
 const initialCode = SNIPPETS[0] ? SNIPPETS[0].code : '';
 initEditor(editorContainer, initialCode, { onRun: executeCode });
-
-// Initialize collapsible left sidebar educational snippet browser
 initSidebar();
-
-// Attach event listeners
 runBtn.addEventListener('click', executeCode);
 
-// Start compiler initialization
-initializeCompiler();
+updateStatus('loading', '⏳ Loading BrowserCC…');
+terminal.writeInfo('⬡ BrowserCC interactive terminal ready.');
+terminal.writeInfo('Write your C program above and click ▶ Run Code.');
+setTimeout(() => updateStatus('ready', '🟢 Ready'), 50);

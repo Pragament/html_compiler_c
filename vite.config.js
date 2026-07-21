@@ -6,10 +6,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
     base: "/html_compiler_c/",
-    resolve: {
-        alias: {
-            stream: path.resolve(__dirname, "src/stream-stub.js"),
-            util: path.resolve(__dirname, "src/stream-stub.js"),
-        },
+    build: {
+        rollupOptions: {
+            external: ['browsercc', '@bjorn3/browser_wasi_shim']
+        }
     },
+    optimizeDeps: {
+        exclude: ['browsercc', '@bjorn3/browser_wasi_shim']
+    }
 });
