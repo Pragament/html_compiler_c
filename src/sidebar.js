@@ -81,12 +81,12 @@ export function initSidebar(options = {}) {
   const toggleBtn = document.getElementById('toggleSidebarBtn');
   const sidebarEl = document.getElementById('sidebar');
   const layoutEl = document.querySelector('.main-layout');
-  
+
   if (toggleBtn && sidebarEl && layoutEl) {
     toggleBtn.addEventListener('click', () => {
       sidebarEl.classList.toggle('collapsed');
       layoutEl.classList.toggle('sidebar-collapsed');
-      
+
       const isCollapsed = sidebarEl.classList.contains('collapsed');
       toggleBtn.title = isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar';
       toggleBtn.innerHTML = isCollapsed ? '▶ Snippets' : '◀ Snippets';
